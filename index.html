@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Expert-Expert Text RPG</title>
+<style>
+    body { font-family: monospace; background: #111; color: #eee; padding: 20px; }
+    .log { border: 1px solid #555; padding: 10px; height: 300px; overflow-y: auto; background: #222; }
+    button { margin: 5px; padding: 10px 20px; font-size: 16px; cursor: pointer; }
+</style>
+</head>
+<body>
+
+<h1>Expert-Expert Text RPG</h1>
+<div id="stats"></div>
+<div class="log" id="log"></div>
+
+<div id="actions"></div>
+
+<script>
+const player = {
+    name: "",
+    pclass: "",
+    level: 1,
+    xp: 0,
+    gold: 50,
+    hp: 100,
+    maxHp: 100,
+    attack: 10,
+    defense: 5,
+    inventory: {"Potion": 3},
+    skills: {},
+    location: "Town"
+};
+
+const areas = {
+    "Town": ["Forest", "Dungeon"],
+    "Forest": ["Town", "Cave"],
+    "Dungeon": ["Town", "Cave"],
+    "Cave": ["Forest", "Dungeon"]
+};
+
+const enemies = {
+    "Forest": [{name:"Goblin", hp:30, attack:8, xp:20, gold:10}, {name:"Wolf", hp:25, attack:10, xp:25, gold:15}],
+    "Dungeon": [{name:"Skeleton", hp:40, attack:12, xp:40, gold:20}, {name:"Orc", hp:50, attack:15, xp:50, gold:25}],
+    "Cave": [{name:"Bat", hp:20, attack:5, xp:15, gold:5}, {name:"Spider", hp:35, attack:10, xp:30, gold:10}]
+};
+
+let currentEnemy = null;
+
+function log(msg) {
+    const logDiv = document.getElementById("log");
+    logDiv.innerHTML += msg + "<br>";
+    logDiv.scrollTop = logDiv.scrollHeight;
+}
+
+function updateStats() {
+    document.getElementById("stats").innerHTML = 
+        `Name: ${player.name} | Class: ${player.pclass} | Level: ${player.level} | XP: ${player.xp} | Gold: ${player.gold} | HP: ${player.hp}/${player.maxHp}`;
+}
+
+function levelUp() {
+    while(player.xp >= player.level * 50){
+        player.xp -= player.level * 50;
+        player.level++;
+        player.maxHp += 20;
+        player.hp = player.maxHp;
+        player.attack += 5;
+        player.defense += 2;
+        log(`*** ${player.name} leveled up to ${player.level}! ***`);
+    }
+}
+
+function useItem(item) {
+    if(player.inventory[item] > 0){
+        if(item === "Potion"){
+            const heal = Math.floor(Math.random() * 20) + 20;
+            player.hp = Math.min(player.maxHp, player.hp + heal);
+            log(`You used a Potion and healed ${heal} HP!`);
+        }
+        player.inventory[item]--;
+    } else {
+        log(`No ${item} left!`);
+    }
+    updateStats();
+    showActions();
+}
+
+function startBattle(enemy){
+    currentEnemy = {...enemy};
+    log(`A wild ${enemy.name} appears!`);
+    showBattleActions();
+}
+
+function attackEnemy() {
+    const damage = Math.max(0, Math.floor(Math.random() * (player.attack-5+1) + 5) - Math.floor(Math.random()*3));
+    currentEnemy.hp -= damage;
+    log(`You attack ${currentEnemy.name} for ${damage} damage.`);
+    enemyTurn();
+}
+
+function useSkill(skill){
+    const dmg = player.skills[skill] + Math.floor(Math.random()*5);
+    currentEnemy.hp -= dmg;
+    log(`You use ${skill} and deal ${dmg} damage!`);
+    enemyTurn();
+}
+
+function enemyTurn(){
+    if(currentEnemy.hp <= 0){
+        log(`You defeated ${currentEnemy.name}!`);
+        player.xp += currentEnemy.xp;
+        player.gold += currentEnemy.gold;
+        levelUp();
+        currentEnemy = null;
+        showActions();
+        updateStats();
+        return;
+    }
+    const dmg = Math.max(0, Math.floor(Math.random()*currentEnemy.attack));
+    player.hp -= dmg;
+    log(`${currentEnemy.name} attacks you for ${dmg} damage!`);
+    updateStats();
+    if(player.hp <= 0){
+        log("You have been defeated...");
+        showActions();
+    } else {
+        showBattleActions();
+    }
+}
+
+function explore(){
+    const locs = areas[player.location];
+    const choices = locs.map((l,i)=>`${i+1}. ${l}`).join("<br>");
+    const choice = prompt(`Where do you want to go?\n${choices}`);
+    const newLoc = locs[parseInt(choice)-1];
+    if(newLoc){
+        player.location = newLoc;
+        log(`You travel to ${newLoc}...`);
+        if(Math.random()<0.7){
+            const enemy = enemies[newLoc][Math.floor(Math.random()*enemies[newLoc].length)];
+            startBattle(enemy);
+        } else {
+            showActions();
+        }
+        updateStats();
+    } else {
+        log("Invalid choice!");
+        showActions();
+    }
+}
+
+function showActions(){
+    if(currentEnemy) return;
+    const actionsDiv = document.getElementById("actions");
+    actionsDiv.innerHTML = `
+        <button onclick="explore()">Explore</button>
+        <button onclick="showInventory()">Inventory</button>
+    `;
+}
+
+function showInventory(){
+    const actionsDiv = document.getElementById("actions");
+    actionsDiv.innerHTML = "";
+    for(const item in player.inventory){
+        actionsDiv.innerHTML += `<button onclick="useItem('${item}')">${item} (${player.inventory[item]})</button>`;
+    }
+    actionsDiv.innerHTML += `<button onclick="showActions()">Back</button>`;
+}
+
+function showBattleActions(){
+    const actionsDiv = document.getElementById("actions");
+    actionsDiv.innerHTML = `<button onclick="attackEnemy()">Attack</button>`;
+    for(const skill in player.skills){
+        actionsDiv.innerHTML += `<button onclick="useSkill('${skill}')">${skill}</button>`;
+    }
+    for(const item in player.inventory){
+        if(player.inventory[item]>0){
+            actionsDiv.innerHTML += `<button onclick="useItem('${item}')">${item}</button>`;
+        }
+    }
+}
+
+function startGame(){
+    player.name = prompt("Enter your character name:");
+    player.pclass = prompt("Choose class: Warrior / Mage / Rogue");
+    if(player.pclass.toLowerCase() === "mage"){
+        player.skills = {"Fireball":20,"Ice Spike":25};
+    } else if(player.pclass.toLowerCase() === "rogue"){
+        player.skills = {"Backstab":25,"Poison Dart":15};
+    } else {
+        player.skills = {"Slash":20,"Power Strike":25};
+    }
+    updateStats();
+    showActions();
+}
+
+startGame();
+</script>
+
+</body>
+</html>
